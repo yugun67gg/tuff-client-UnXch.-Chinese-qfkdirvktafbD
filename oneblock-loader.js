@@ -1,89 +1,84 @@
 (function() {
   'use strict';
-  console.log('[OneBlockLoader] v2.0 Initializing...');
-  
-  // Wait for Eaglercraft to load
-  function waitForEaglercraft() {
-    return new Promise((resolve) => {
-      const checkInterval = setInterval(() => {
-        // Check if game is loaded and main function exists
-        if (window.main && typeof window.main === 'function') {
-          clearInterval(checkInterval);
-          console.log('[OneBlockLoader] Eaglercraft detected');
-          resolve(true);
-        }
-      }, 500);
-      
-      // Timeout after 10 seconds
-      setTimeout(() => {
-        clearInterval(checkInterval);
-        console.log('[OneBlockLoader] Eaglercraft timeout');
-        resolve(false);
-      }, 10000);
-    });
-  }
+  console.log('[OneBlockLoader] v3.0 - Direct Integration');
 
-  // Register OneBlock world type with Eaglercraft
-  async function registerOneBlock() {
-    try {
-      await waitForEaglercraft();
-      
-      // Ensure eaglercraftXOpts exists
-      if (!window.eaglercraftXOpts) {
-        window.eaglercraftXOpts = {};
-      }
+  // Store OneBlock configuration globally
+  window.ONEBLOCK_MOD = {
+    enabled: true,
+    id: 'oneblock',
+    name: 'OneBlock',
+    jarFile: 'oneblock-1.12.2-1.1.2.jar'
+  };
 
-      // Add OneBlock to world generators
+  // Hook into Eaglercraft's world creation
+  function hookEaglercraft() {
+    // Patch the world creation to include OneBlock
+    if (window.eaglercraftXOpts) {
+      console.log('[OneBlockLoader] Found eaglercraftXOpts');
+      
+      // Add OneBlock as a world type option
       if (!window.eaglercraftXOpts.worldTypes) {
-        window.eaglercraftXOpts.worldTypes = [];
+        window.eaglercraftXOpts.worldTypes = {};
       }
 
-      // Define OneBlock world type
-      const oneBlockWorldType = {
-        id: 'oneblock',
+      // Register OneBlock
+      window.eaglercraftXOpts.worldTypes['oneblock'] = {
         name: 'OneBlock',
-        description: 'Survive on a single block with unlimited inventory',
-        jarMod: 'oneblock-1.12.2-1.1.2.jar',
-        icon: '📦'
+        id: 'oneblock'
       };
 
-      // Check if not already registered
-      const exists = window.eaglercraftXOpts.worldTypes.some(
-        wt => wt.id === 'oneblock'
-      );
+      console.log('[OneBlockLoader] ✅ OneBlock added to worldTypes');
+      console.log('[OneBlockLoader] worldTypes:', window.eaglercraftXOpts.worldTypes);
+    }
 
-      if (!exists) {
-        window.eaglercraftXOpts.worldTypes.push(oneBlockWorldType);
-        console.log('[OneBlockLoader] ✅ OneBlock registered');
+    // Try to find and patch world generation selector
+    try {
+      // Look for any object that might contain world generators
+      for (let key in window) {
+        if (key.includes('Generator') || key.includes('World') || key.includes('Type')) {
+          console.log('[OneBlockLoader] Found potential object:', key);
+        }
       }
-
-      // Also store in global registry
-      window.ONEBLOCK_CONFIG = {
-        enabled: true,
-        worldType: oneBlockWorldType,
-        modJar: 'oneblock-1.12.2-1.1.2.jar'
-      };
-
-      // Dispatch ready event
-      document.dispatchEvent(
-        new CustomEvent('oneblockReady', { detail: oneBlockWorldType })
-      );
-
-      console.log('[OneBlockLoader] Ready!');
-      return true;
-
-    } catch (error) {
-      console.error('[OneBlockLoader] Error:', error);
-      return false;
+    } catch (e) {
+      // Silent fail
     }
   }
 
-  // Auto-initialize
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-      setTimeout(registerOneBlock, 1000);
+  // Wait for page load and Eaglercraft initialization
+  function initializeWhenReady() {
+    // Try immediately
+    hookEaglercraft();
+
+    // Try after various delays
+    const delays = [500, 1000, 2000, 3000, 5000, 10000];
+    delays.forEach(delay => {
+      setTimeout(() => {
+        console.log('[OneBlockLoader] Retry at', delay, 'ms');
+        hookEaglercraft();
+      }, delay);
     });
-  } else {
-    setTimeout(registerOneBlock, 1000);
+
+    // Try on any DOM change
+    const observer = new MutationObserver(() => {
+      hookEaglercraft();
+    });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: false
+    });
   }
+
+  // Start when document is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeWhenReady);
+  } else {
+    initializeWhenReady();
+  }
+
+  // Also try on window load
+  window.addEventListener('load', initializeWhenReady);
+
+  console.log('[OneBlockLoader] Module loaded');
 })();
